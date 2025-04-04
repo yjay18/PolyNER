@@ -9,7 +9,6 @@ setup(
         "langdetect",
         "emoji",
         "spacy",
-        "nltk",
     ],
     python_requires=">=3.7",
     author="PolyNER Team",

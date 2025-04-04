@@ -3,7 +3,6 @@ Module for emoji detection and handling.
 """
 
 import emoji
-import re
 from typing import List, Set
 
 def is_emoji(text: str) -> bool:
@@ -29,19 +28,6 @@ def extract_emojis(text: str) -> List[str]:
         List of emojis found in the text
     """
     return [c for c in text if emoji.is_emoji(c)]
-
-def replace_emojis(text: str, replacement: str = " ") -> str:
-    """
-    Replace all emojis in a text with a specified replacement.
-    
-    Args:
-        text: Input text
-        replacement: String to replace emojis with
-        
-    Returns:
-        Text with emojis replaced
-    """
-    return emoji.replace_emoji(text, replacement)
 
 def get_emoji_description(emoji_char: str) -> str:
     """
@@ -77,7 +63,8 @@ def categorize_emoji(emoji_char: str) -> str:
     emoji_data = emoji.EMOJI_DATA.get(emoji_char, {})
     
     # Extract category from the emoji data
-    # This is a simplified approach - actual categories would depend on the emoji library
+    # This is a simplified approach
+    # TODO: Better more robust implementation
     description = emoji_data.get('en', '').lower()
     
     # Simple categorization based on keywords in description

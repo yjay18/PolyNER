@@ -4,23 +4,39 @@ Module for text tokenization and normalization.
 
 import re
 import unicodedata
-from typing import List, Dict, Any, Optional
-import nltk
-from nltk.tokenize import word_tokenize
+from typing import List, Dict, Any, Optional, Callable
 import spacy
+from spacy.tokens import Doc
 
-# Download NLTK data if not already present
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt')
+from .emoji_handling import is_emoji, extract_emojis
 
-# Regex pattern for emojis
-from .emoji_handling import is_emoji, extract_emojis, replace_emojis
+# Global spaCy model cache
+_nlp_models = {}
+
+def get_spacy_model(model_name: str = "en_core_web_sm") -> Any:
+    """
+    Get or load a spaCy model.
+    
+    Args:
+        model_name: Name of the spaCy model
+        
+    Returns:
+        Loaded spaCy model
+    """
+    if model_name not in _nlp_models:
+        try:
+            _nlp_models[model_name] = spacy.load(model_name)
+        except OSError:
+            # If model not found, download it
+            import subprocess
+            subprocess.run(["python", "-m", "spacy", "download", model_name])
+            _nlp_models[model_name] = spacy.load(model_name)
+    
+    return _nlp_models[model_name]
 
 def tokenize_text(text: str, preserve_emojis: bool = True) -> List[str]:
     """
-    Tokenize text while preserving emojis.
+    Tokenize text using spaCy while preserving emojis.
     
     Args:
         text: Input text
@@ -32,8 +48,11 @@ def tokenize_text(text: str, preserve_emojis: bool = True) -> List[str]:
     if not text:
         return []
     
+    # Get spaCy model
+    nlp = get_spacy_model()
+    
     # Extract emojis first
-    emojis = extract_emojis(text)
+    emojis = extract_emojis(text) if preserve_emojis else []
     
     # Replace emojis with placeholders if we want to preserve them
     if preserve_emojis and emojis:
@@ -46,8 +65,9 @@ def tokenize_text(text: str, preserve_emojis: bool = True) -> List[str]:
             placeholders[placeholder] = emoji_char
             text_with_placeholders = text_with_placeholders.replace(emoji_char, f" {placeholder} ")
         
-        # Tokenize the text with placeholders
-        tokens = word_tokenize(text_with_placeholders)
+        # Process with spaCy
+        doc = nlp(text_with_placeholders)
+        tokens = [token.text for token in doc]
         
         # Replace placeholders back with emojis
         for i, token in enumerate(tokens):
@@ -55,7 +75,8 @@ def tokenize_text(text: str, preserve_emojis: bool = True) -> List[str]:
                 tokens[i] = placeholders[token]
     else:
         # If we don't need to preserve emojis, just tokenize normally
-        tokens = word_tokenize(text)
+        doc = nlp(text)
+        tokens = [token.text for token in doc]
     
     # Filter out empty tokens
     return [token for token in tokens if token.strip() or is_emoji(token)]
@@ -111,13 +132,7 @@ def get_token_features(token: str, nlp_model: Optional[Any] = None) -> Dict[str,
     
     # Load spaCy model if not provided
     if nlp_model is None:
-        try:
-            nlp_model = spacy.load("en_core_web_sm")
-        except OSError:
-            # If model not found, download it
-            import subprocess
-            subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"])
-            nlp_model = spacy.load("en_core_web_sm")
+        nlp_model = get_spacy_model()
     
     # Process the token
     doc = nlp_model(token)
