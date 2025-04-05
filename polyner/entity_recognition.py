@@ -188,7 +188,7 @@ class DictionaryEntityRecognizer:
             overlaps = False
             for i, existing in enumerate(non_overlapping):
                 if (entity["start"] < existing["end"] and entity["end"] > existing["start"]):
-                    # They overlap - keep the longer one
+                    # if they overlap - keep the longer one
                     if (entity["end"] - entity["start"]) > (existing["end"] - existing["start"]):
                         non_overlapping[i] = entity
                     overlaps = True
