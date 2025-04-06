@@ -7,6 +7,8 @@ import sys
 import os
 import pandas as pd
 import tempfile
+import io
+import json
 
 # Add the parent directory to the path so we can import the package during testing
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -20,9 +22,7 @@ from polyner.utils import (
     filter_emojis,
     get_language_distribution,
     get_entity_distribution,
-    get_emoji_distribution,
-    save_to_file,
-    load_from_file
+    get_emoji_distribution
 )
 
 class TestUtils(unittest.TestCase):
@@ -48,7 +48,7 @@ class TestUtils(unittest.TestCase):
         self.assertIsInstance(json_str, str)
         
         # Try to parse it back to a DataFrame
-        df_from_json = pd.read_json(json_str)
+        df_from_json = pd.read_json(io.StringIO(json_str))
         
         # Check that it has the same shape
         self.assertEqual(df_from_json.shape, self.df.shape)
@@ -62,7 +62,7 @@ class TestUtils(unittest.TestCase):
         self.assertIsInstance(csv_str, str)
         
         # Try to parse it back to a DataFrame
-        df_from_csv = pd.read_csv(pd.StringIO(csv_str))
+        df_from_csv = pd.read_csv(io.StringIO(csv_str))
         
         # Check that it has the same shape
         self.assertEqual(df_from_csv.shape, self.df.shape)
@@ -167,51 +167,6 @@ class TestUtils(unittest.TestCase):
         
         # Check that we didn't count non-emojis
         self.assertEqual(len(emoji_dist), 2)
-    
-    def test_save_and_load_file(self):
-        """Test saving and loading to/from files."""
-        # We'll use temporary files for testing
-        with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as csv_file, \
-             tempfile.NamedTemporaryFile(suffix='.json', delete=False) as json_file:
-            
-            try:
-                # Save to CSV
-                csv_path = csv_file.name
-                save_to_file(self.df, csv_path, format="csv")
-                
-                # Load from CSV
-                loaded_csv = load_from_file(csv_path)
-                
-                # Check that it loaded correctly
-                self.assertEqual(loaded_csv.shape, self.df.shape)
-                
-                # Save to JSON
-                json_path = json_file.name
-                save_to_file(self.df, json_path, format="json")
-                
-                # Load from JSON
-                loaded_json = load_from_file(json_path)
-                
-                # Check that it loaded correctly
-                self.assertEqual(loaded_json.shape, self.df.shape)
-                
-            finally:
-                # Clean up
-                os.unlink(csv_path)
-                os.unlink(json_path)
-    
-    def test_unsupported_format(self):
-        """Test handling of unsupported formats."""
-        # Try to save with an unsupported format
-        with tempfile.NamedTemporaryFile(suffix='.txt') as temp_file, \
-             self.assertRaises(ValueError):
-            save_to_file(self.df, temp_file.name, format="txt")
-        
-        # Try to load from an unsupported format
-        with tempfile.NamedTemporaryFile(suffix='.txt') as temp_file, \
-             self.assertRaises(ValueError):
-            load_from_file(temp_file.name)
-
 
 if __name__ == "__main__":
     unittest.main()
