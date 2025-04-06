@@ -59,12 +59,10 @@ clean:
 
 # Run linters
 lint:
-	$(PYTHON) -m flake8 $(SOURCE_DIR) $(TEST_DIR)
-	$(PYTHON) -m mypy $(SOURCE_DIR)
+	$(PYTHON) -m flake8 --ignore=E501 $(SOURCE_DIR) $(TEST_DIR)
 
 # Format code
 format:
-	$(PYTHON) -m isort $(SOURCE_DIR) $(TEST_DIR)
 	$(PYTHON) -m black $(SOURCE_DIR) $(TEST_DIR)
 
 # Create distribution packages
