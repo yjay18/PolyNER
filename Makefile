@@ -45,17 +45,15 @@ test:
 test-cov:
 	$(PYTHON) -m pytest $(TEST_DIR) --cov=$(SOURCE_DIR) --cov-report=term --cov-report=html
 
-# Clean build artifacts
+# Clean build artifacts (Windows-compatible)
 clean:
-	rm -rf build/
-	rm -rf dist/
-	rm -rf *.egg-info/
-	rm -rf htmlcov/
-	rm -rf .coverage
-	rm -rf .pytest_cache/
-	rm -rf .mypy_cache/
-	find . -type d -name "__pycache__" -exec rm -rf {} +
-	find . -type f -name "*.pyc" -delete
+	if exist build rd /s /q build
+	if exist dist rd /s /q dist
+	if exist polyner.egg-info rd /s /q polyner.egg-info
+	if exist htmlcov rd /s /q htmlcov
+	if exist .coverage del .coverage
+	if exist .pytest_cache rd /s /q .pytest_cache
+	if exist .mypy_cache rd /s /q .mypy_cache
 
 # Run linters
 lint:
