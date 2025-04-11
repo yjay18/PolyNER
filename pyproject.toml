@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "polyner"
-version = "0.1.0"
+version = "0.2.0"
 description = "A multilingual NER library that handles text, emojis, and multiple languages"
 readme = "README.md"
 authors = [
@@ -32,6 +32,8 @@ dependencies = [
     "langdetect>=1.0.7",
     "emoji>=1.2.0",
     "spacy>=3.0.0",
+    # Note: transformers and torch are not required dependencies
+    # They will be imported dynamically when needed
 ]
 
 [project.optional-dependencies]
