@@ -1,6 +1,6 @@
 # PolyNER
 
-PolyNER is a Python library for multilingual Named Entity Recognition to simplify NER related workflows.
+PolyNER is a Python library for multilingual Named Entity Recognition that handles text, emojis, and multiple languages.
 
 ## Features (v.0.2.0)
 
