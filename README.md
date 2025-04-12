@@ -53,7 +53,7 @@ result = processor.process_multi(text)
 
 # Show detected entities
 entities = result[result["entity_label"].notna()]
-print(entities[["token", "language", "entity_label"]])
+print(entities)
 
 # You can also specify a different model
 result = processor.process_multi(text, model_name="xlm-roberta-base-finetuned-panx-all")

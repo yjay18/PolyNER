@@ -51,10 +51,10 @@ def recognize_entities(text: str, model: Any = None) -> List[Dict[str, Any]]:
 
 
 def recognize_entities_multilingual(
-    text: str, 
-    model_name: str = "Babelscape/wikineural-multilingual-ner", 
+    text: str,
+    model_name: str = "Babelscape/wikineural-multilingual-ner",
     models: Dict[str, Any] = None,
-    confidence_threshold: float = 0.5
+    confidence_threshold: float = 0.5,
 ) -> List[Dict[str, Any]]:
     """
     Recognize entities in multilingual text using context-aware entity recognition.
@@ -69,147 +69,161 @@ def recognize_entities_multilingual(
         List of dictionaries with entity information
     """
     import string
-    
+
     # Skip empty text
     if not text:
         return []
-        
+
     # Step 1: Try to use Hugging Face transformer model
     try:
         # Import inside try block to avoid dependency issues
         from transformers import pipeline
-        
+
         # Initialize the NER pipeline with the specified model
         ner_pipeline = pipeline("ner", model=model_name, aggregation_strategy="simple")
-        
+
         # Get entity predictions with context
         predictions = ner_pipeline(text)
-        
+
         # Process and filter predictions
         entities = []
         for pred in predictions:
             # Filter out low confidence predictions and punctuation
-            if (pred.get("score", 1.0) > confidence_threshold and 
-                not pred["word"].strip() in string.punctuation):
-                entities.append({
-                    "text": pred["word"],
-                    "start": pred["start"],
-                    "end": pred["end"],
-                    "label": pred["entity_group"],
-                    "score": pred.get("score", 1.0),
-                    "source": "huggingface"
-                })
-        
+            if (
+                pred.get("score", 1.0) > confidence_threshold
+                and not pred["word"].strip() in string.punctuation
+            ):
+                entities.append(
+                    {
+                        "text": pred["word"],
+                        "start": pred["start"],
+                        "end": pred["end"],
+                        "label": pred["entity_group"],
+                        "score": pred.get("score", 1.0),
+                        "source": "huggingface",
+                    }
+                )
+
         # If we found entities, return them
         if entities:
             return entities
-            
+
     except Exception as e:
         print(f"Error using Hugging Face model: {str(e)}")
-    
+
     # Step 2: If model_name looks like a spaCy model, try to use it directly
-    if (model_name.endswith('.spacy') or 
-        model_name.find('_core_') > 0 or
-        os.path.exists(model_name)):
+    if (
+        model_name.endswith(".spacy")
+        or model_name.find("_core_") > 0
+        or os.path.exists(model_name)
+    ):
         try:
             import spacy
+
             nlp = spacy.load(model_name)
             doc = nlp(text)
-            
+
             entities = []
             for ent in doc.ents:
                 if not ent.text.strip() in string.punctuation:
-                    entities.append({
-                        "text": ent.text,
-                        "start": ent.start_char,
-                        "end": ent.end_char,
-                        "label": ent.label_,
-                        "source": "spacy"
-                    })
-            
+                    entities.append(
+                        {
+                            "text": ent.text,
+                            "start": ent.start_char,
+                            "end": ent.end_char,
+                            "label": ent.label_,
+                            "source": "spacy",
+                        }
+                    )
+
             # If we found entities, return them
             if entities:
                 return entities
-                
+
         except Exception as e:
             print(f"Error using spaCy model {model_name}: {str(e)}")
-    
+
     # Step 3: Try language-specific processing with spaCy models
     if models is not None:
         try:
             # Use language detection and split text by language
             from .language_detection import detect_language
             import re
-            
+
             # Split into sentences for better language detection
-            sentences = re.split(r'(?<=[.!?])\s+', text)
-            
+            sentences = re.split(r"(?<=[.!?])\s+", text)
+
             # Process each sentence with language detection
             all_entities = []
             current_pos = 0
-            
+
             for sentence in sentences:
                 if not sentence.strip():  # Skip empty sentences
                     current_pos += len(sentence) + 1
                     continue
-                    
+
                 # Detect language of the sentence
                 lang = detect_language(sentence)
-                
+
                 # Select the appropriate model for this language
                 if lang in models:
                     model = models[lang]
                 else:
                     # Fall back to English or the first available model
                     model = models.get("en", next(iter(models.values())))
-                
+
                 # Process the sentence
                 doc = model(sentence)
-                
+
                 # Extract entities with correct position in original text
                 for ent in doc.ents:
                     if not ent.text.strip() in string.punctuation:
-                        all_entities.append({
-                            "text": ent.text,
-                            "start": current_pos + ent.start_char,
-                            "end": current_pos + ent.end_char,
-                            "label": ent.label_,
-                            "language": lang,
-                            "source": "spacy_multilingual"
-                        })
-                
+                        all_entities.append(
+                            {
+                                "text": ent.text,
+                                "start": current_pos + ent.start_char,
+                                "end": current_pos + ent.end_char,
+                                "label": ent.label_,
+                                "language": lang,
+                                "source": "spacy_multilingual",
+                            }
+                        )
+
                 # Update position for next sentence
                 current_pos += len(sentence) + 1  # +1 for space
-            
+
             # Sort entities by position
             all_entities.sort(key=lambda e: e["start"])
-            
+
             # If we found entities, return them
             if all_entities:
                 return all_entities
-                
+
         except Exception as e:
             print(f"Error in multilingual spaCy processing: {str(e)}")
-    
+
     # Step 4: Last resort - try with English spaCy model
     try:
         import spacy
+
         model = spacy.load("en_core_web_sm")
         doc = model(text)
-        
+
         entities = []
         for ent in doc.ents:
             if not ent.text.strip() in string.punctuation:
-                entities.append({
-                    "text": ent.text,
-                    "start": ent.start_char,
-                    "end": ent.end_char,
-                    "label": ent.label_,
-                    "source": "spacy_fallback"
-                })
-        
+                entities.append(
+                    {
+                        "text": ent.text,
+                        "start": ent.start_char,
+                        "end": ent.end_char,
+                        "label": ent.label_,
+                        "source": "spacy_fallback",
+                    }
+                )
+
         return entities
-        
+
     except Exception as e:
         print(f"Error in final fallback: {str(e)}")
         return []  # Return empty list if all attempts fail

@@ -1,6 +1,7 @@
 """
 Core module containing the main PolyNER class.
 """
+
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -46,7 +47,7 @@ class PolyNER:
                 self.ner_model = spacy.load("en_core_web_sm")
         else:
             self.ner_model = ner_model
-            
+
         # Initialize language models dictionary for multilingual processing
         self.language_models = {}
         if self.languages:
@@ -57,7 +58,7 @@ class PolyNER:
                 except OSError:
                     # Skip if not available
                     pass
-        
+
         # Always ensure English is available
         if "en" not in self.language_models:
             self.language_models["en"] = self.ner_model
@@ -113,95 +114,92 @@ class PolyNER:
 
         # Convert to DataFrame
         return pd.DataFrame(results)
-    
+
     def process_multi(
-        self, 
-        text: str, 
+        self,
+        text: str,
         model_name: str = "Babelscape/wikineural-multilingual-ner",
-        confidence_threshold: float = 0.5
+        confidence_threshold: float = 0.5,
     ) -> pd.DataFrame:
         """
         Process multilingual text using a specialized model for NER.
-        
+
         Args:
             text: Input text that may contain multiple languages and emojis
             model_name: Name or path of the model to use
             confidence_threshold: Minimum confidence score for entities (0.0 to 1.0)
-                    
+
         Returns:
             DataFrame with token-level information and confidence scores
         """
-        from .emoji_handling import is_emoji
-        from .language_detection import detect_language
-        from .tokenization import normalize_token, tokenize_text
-        from .entity_recognition import recognize_entities_multilingual
-        
         if not text:
             return pd.DataFrame()
-            
+
         # Step 1: Split text into sentences for better language detection
         import re
-        sentences = re.split(r'(?<=[.!?])\s+', text)
+        sentences = re.split(r"(?<=[.!?])\s+", text)
         sentence_spans = []
-        
+
         # Track the start position of each sentence
         current_pos = 0
         for sentence in sentences:
             if sentence:  # Skip empty sentences
-                sentence_spans.append({
-                    "text": sentence,
-                    "start": current_pos,
-                    "end": current_pos + len(sentence),
-                    "language": detect_language(sentence)
-                })
+                sentence_spans.append(
+                    {
+                        "text": sentence,
+                        "start": current_pos,
+                        "end": current_pos + len(sentence),
+                        "language": detect_language(sentence),
+                    }
+                )
                 current_pos += len(sentence) + 1  # +1 for the space
-                
+
         # Step 2: Get entity predictions using the context-aware function
         entities = recognize_entities_multilingual(
-            text, 
-            model_name=model_name, 
+            text,
+            model_name=model_name,
             models=self.language_models,
-            confidence_threshold=confidence_threshold
+            confidence_threshold=confidence_threshold,
         )
-        
+
         # Step 3: Tokenize and process tokens
         tokens = tokenize_text(text)
         results = []
         token_start = 0
-        
+
         for token in tokens:
             # Find token position in the text
             token_pos = text.find(token, token_start)
             if token_pos == -1:  # If not found, search from beginning
                 token_pos = text.find(token)
-            
+
             token_end = token_pos + len(token)
             token_start = token_pos + 1  # Update for next search
-            
+
             # Check if token is an emoji
             emoji_flag = is_emoji(token)
-            
+
             # Find which sentence contains this token
             token_sentence = None
             for sentence in sentence_spans:
                 if token_pos >= sentence["start"] and token_pos < sentence["end"]:
                     token_sentence = sentence
                     break
-            
+
             # Assign language based on sentence
             lang = None
             if not emoji_flag and token_sentence:
                 lang = token_sentence["language"]
-            
+
             # Normalize token if needed
             norm_token = token
             if self.normalize and not emoji_flag:
                 norm_token = normalize_token(token)
-                
+
             # Check if token is part of an entity
             entity_label = None
             confidence = None
-            
+
             if not emoji_flag:
                 for entity in entities:
                     # Check if token falls within entity boundaries
@@ -210,7 +208,7 @@ class PolyNER:
                         if "score" in entity:
                             confidence = entity["score"]
                         break
-            
+
             # Add to results - including standard columns plus confidence
             result_dict = {
                 "token": token,
@@ -219,15 +217,15 @@ class PolyNER:
                 "norm_token": norm_token,
                 "entity_label": entity_label,
             }
-            
+
             # Add confidence score as an additional column
             result_dict["confidence"] = confidence
-                
+
             results.append(result_dict)
-                
+
         # Convert to DataFrame
         return pd.DataFrame(results)
-    
+
     def process_batch(self, texts: List[str]) -> List[pd.DataFrame]:
         """
         Process a batch of texts.
@@ -239,11 +237,11 @@ class PolyNER:
             List of DataFrames with token-level information
         """
         return [self.process(text) for text in texts]
-        
+
     def process_batch_multi(
-        self, 
-        texts: List[str], 
-        model_name: str = "Babelscape/wikineural-multilingual-ner"
+        self,
+        texts: List[str],
+        model_name: str = "Babelscape/wikineural-multilingual-ner",
     ) -> List[pd.DataFrame]:
         """
         Process a batch of texts using multilingual model.
@@ -265,8 +263,10 @@ class PolyNER:
             model_path: Path to the custom model
         """
         self.ner_model = spacy.load(model_path)
-        
-    def add_language_model(self, language: str, model_name: Optional[str] = None) -> bool:
+
+    def add_language_model(
+        self, language: str, model_name: Optional[str] = None
+    ) -> bool:
         """
         Add a language model for multilingual processing.
 
@@ -279,10 +279,10 @@ class PolyNER:
         """
         if language in self.language_models:
             return True  # Already loaded
-            
+
         if model_name is None:
             model_name = f"{language}_core_web_sm"
-            
+
         try:
             # Try to load the model
             self.language_models[language] = spacy.load(model_name)
@@ -291,6 +291,7 @@ class PolyNER:
             # Try to download the model
             try:
                 import subprocess
+
                 subprocess.run(["python", "-m", "spacy", "download", model_name])
                 self.language_models[language] = spacy.load(model_name)
                 return True
