@@ -129,8 +129,13 @@ class PolyNER:
             confidence_threshold: Minimum confidence score for entities (0.0 to 1.0)
                     
         Returns:
-            DataFrame with token-level information
-        """ 
+            DataFrame with token-level information and confidence scores
+        """
+        from .emoji_handling import is_emoji
+        from .language_detection import detect_language
+        from .tokenization import normalize_token, tokenize_text
+        from .entity_recognition import recognize_entities_multilingual
+        
         if not text:
             return pd.DataFrame()
             
@@ -195,20 +200,18 @@ class PolyNER:
                 
             # Check if token is part of an entity
             entity_label = None
-            entity_score = None
-            entity_text = None
+            confidence = None
             
             if not emoji_flag:
                 for entity in entities:
                     # Check if token falls within entity boundaries
                     if token_pos >= entity["start"] and token_end <= entity["end"]:
                         entity_label = entity["label"]
-                        entity_text = entity["text"]
                         if "score" in entity:
-                            entity_score = entity["score"]
+                            confidence = entity["score"]
                         break
             
-            # Add to results
+            # Add to results - including standard columns plus confidence
             result_dict = {
                 "token": token,
                 "language": lang,
@@ -217,18 +220,13 @@ class PolyNER:
                 "entity_label": entity_label,
             }
             
-            # Add additional context information
-            if entity_text:
-                result_dict["entity_text"] = entity_text
-            
-            if entity_score is not None:
-                result_dict["entity_score"] = entity_score
+            # Add confidence score as an additional column
+            result_dict["confidence"] = confidence
                 
             results.append(result_dict)
-        
+                
         # Convert to DataFrame
         return pd.DataFrame(results)
-    
     
     def process_batch(self, texts: List[str]) -> List[pd.DataFrame]:
         """
