@@ -53,148 +53,166 @@ def recognize_entities(text: str, model: Any = None) -> List[Dict[str, Any]]:
 def recognize_entities_multilingual(
     text: str, 
     model_name: str = "Babelscape/wikineural-multilingual-ner", 
-    models: Dict[str, Any] = None
+    models: Dict[str, Any] = None,
+    confidence_threshold: float = 0.5
 ) -> List[Dict[str, Any]]:
     """
-    Recognize entities in multilingual text using either Hugging Face or spaCy models.
+    Recognize entities in multilingual text using context-aware entity recognition.
 
     Args:
         text: Input text
         model_name: Name of the model to use (default: "Babelscape/wikineural-multilingual-ner")
-                    Can be a Hugging Face model name or spaCy model name
-        models: Dictionary mapping language codes to spaCy models (for language-specific processing)
+        models: Dictionary mapping language codes to spaCy models (for fallback)
+        confidence_threshold: Minimum confidence score for entities (0.0 to 1.0)
 
     Returns:
         List of dictionaries with entity information
     """
-    # First check if model_name is a spaCy model
-    if (model_name.endswith('.spacy') or 
-        model_name.find('_core_') > 0 or
-        os.path.exists(model_name)):
-        try:
-            # Try to load as a spaCy model
-            spacy_model = spacy.load(model_name)
-            doc = spacy_model(text)
-            
-            # Extract entities
-            entities = []
-            for ent in doc.ents:
-                entities.append(
-                    {
-                        "text": ent.text,
-                        "start": ent.start_char,
-                        "end": ent.end_char,
-                        "label": ent.label_,
-                        "description": spacy.explain(ent.label_),
-                    }
-                )
-            return entities
-        except Exception as e:
-            print(f"Failed to use {model_name} as spaCy model: {str(e)}")
-            # Fall through to try Hugging Face
+    import string
     
-    # Try to use Hugging Face transformers
+    # Skip empty text
+    if not text:
+        return []
+        
+    # Step 1: Try to use Hugging Face transformer model
     try:
-        # Lazy import transformers to avoid dependency if not used
+        # Import inside try block to avoid dependency issues
         from transformers import pipeline
         
         # Initialize the NER pipeline with the specified model
         ner_pipeline = pipeline("ner", model=model_name, aggregation_strategy="simple")
         
-        # Get entity predictions
-        entities = []
-        
-        # Process the text
+        # Get entity predictions with context
         predictions = ner_pipeline(text)
         
-        # Convert predictions to our standard format
+        # Process and filter predictions
+        entities = []
         for pred in predictions:
-            entity = {
-                "text": pred["word"],
-                "start": pred["start"],
-                "end": pred["end"],
-                "label": pred["entity_group"],
-                "score": pred["score"],
-                # Add language detection here if needed
-                "language": None,  # Will be filled by the caller if needed
-                "description": f"Entity detected by {model_name}"
-            }
-            entities.append(entity)
-            
-        return entities
+            # Filter out low confidence predictions and punctuation
+            if (pred.get("score", 1.0) > confidence_threshold and 
+                not pred["word"].strip() in string.punctuation):
+                entities.append({
+                    "text": pred["word"],
+                    "start": pred["start"],
+                    "end": pred["end"],
+                    "label": pred["entity_group"],
+                    "score": pred.get("score", 1.0),
+                    "source": "huggingface"
+                })
         
+        # If we found entities, return them
+        if entities:
+            return entities
+            
     except Exception as e:
-        # If Hugging Face failed and we haven't tried spaCy multilingual yet, do that
-        if models is not None:
-            try:
-                # Use language detection and multiple spaCy models
-                from .language_detection import detect_language
-                from .tokenization import split_by_language
-                
-                # Split text by language
-                language_segments = split_by_language(text)
-                
-                # Process each language segment with the appropriate model
-                all_entities = []
-                offset = 0
-                
-                for lang, segments in language_segments.items():
-                    # Use the appropriate model for the language, or fall back to English
-                    model = models.get(lang, models.get("en"))
-                    
-                    for segment in segments:
-                        # Find the segment in the original text to get the correct offset
-                        segment_start = text.find(segment, offset)
-                        if segment_start == -1:
-                            continue
-                        
-                        # Update offset for next search
-                        offset = segment_start + len(segment)
-                        
-                        # Recognize entities in this segment
-                        doc = model(segment)
-                        
-                        for ent in doc.ents:
-                            all_entities.append(
-                                {
-                                    "text": ent.text,
-                                    "start": segment_start + ent.start_char,
-                                    "end": segment_start + ent.end_char,
-                                    "label": ent.label_,
-                                    "language": lang,
-                                    "description": spacy.explain(ent.label_),
-                                }
-                            )
-                
-                # Sort entities by their position in the text
-                all_entities.sort(key=lambda e: e["start"])
-                
-                return all_entities
-            except Exception as nested_e:
-                print(f"Failed multilingual spaCy processing: {str(nested_e)}")
-        
-        # If all attempts failed, try one last fallback to standard spaCy English
+        print(f"Error using Hugging Face model: {str(e)}")
+    
+    # Step 2: If model_name looks like a spaCy model, try to use it directly
+    if (model_name.endswith('.spacy') or 
+        model_name.find('_core_') > 0 or
+        os.path.exists(model_name)):
         try:
-            # Load English model as last resort
-            model = spacy.load("en_core_web_sm")
-            doc = model(text)
+            import spacy
+            nlp = spacy.load(model_name)
+            doc = nlp(text)
             
-            # Extract entities
             entities = []
             for ent in doc.ents:
-                entities.append(
-                    {
+                if not ent.text.strip() in string.punctuation:
+                    entities.append({
                         "text": ent.text,
                         "start": ent.start_char,
                         "end": ent.end_char,
                         "label": ent.label_,
-                        "description": spacy.explain(ent.label_),
-                    }
-                )
-            return entities
-        except:
-            # If all else fails, return empty list
-            return []
+                        "source": "spacy"
+                    })
+            
+            # If we found entities, return them
+            if entities:
+                return entities
+                
+        except Exception as e:
+            print(f"Error using spaCy model {model_name}: {str(e)}")
+    
+    # Step 3: Try language-specific processing with spaCy models
+    if models is not None:
+        try:
+            # Use language detection and split text by language
+            from .language_detection import detect_language
+            import re
+            
+            # Split into sentences for better language detection
+            sentences = re.split(r'(?<=[.!?])\s+', text)
+            
+            # Process each sentence with language detection
+            all_entities = []
+            current_pos = 0
+            
+            for sentence in sentences:
+                if not sentence.strip():  # Skip empty sentences
+                    current_pos += len(sentence) + 1
+                    continue
+                    
+                # Detect language of the sentence
+                lang = detect_language(sentence)
+                
+                # Select the appropriate model for this language
+                if lang in models:
+                    model = models[lang]
+                else:
+                    # Fall back to English or the first available model
+                    model = models.get("en", next(iter(models.values())))
+                
+                # Process the sentence
+                doc = model(sentence)
+                
+                # Extract entities with correct position in original text
+                for ent in doc.ents:
+                    if not ent.text.strip() in string.punctuation:
+                        all_entities.append({
+                            "text": ent.text,
+                            "start": current_pos + ent.start_char,
+                            "end": current_pos + ent.end_char,
+                            "label": ent.label_,
+                            "language": lang,
+                            "source": "spacy_multilingual"
+                        })
+                
+                # Update position for next sentence
+                current_pos += len(sentence) + 1  # +1 for space
+            
+            # Sort entities by position
+            all_entities.sort(key=lambda e: e["start"])
+            
+            # If we found entities, return them
+            if all_entities:
+                return all_entities
+                
+        except Exception as e:
+            print(f"Error in multilingual spaCy processing: {str(e)}")
+    
+    # Step 4: Last resort - try with English spaCy model
+    try:
+        import spacy
+        model = spacy.load("en_core_web_sm")
+        doc = model(text)
+        
+        entities = []
+        for ent in doc.ents:
+            if not ent.text.strip() in string.punctuation:
+                entities.append({
+                    "text": ent.text,
+                    "start": ent.start_char,
+                    "end": ent.end_char,
+                    "label": ent.label_,
+                    "source": "spacy_fallback"
+                })
+        
+        return entities
+        
+    except Exception as e:
+        print(f"Error in final fallback: {str(e)}")
+        return []  # Return empty list if all attempts fail
 
 
 class DictionaryEntityRecognizer:
